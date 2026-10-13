@@ -100,9 +100,9 @@ export const SCORING = {
 export const CAMERA = {
   fovPortrait: 48,
   fovLandscape: 40,
-  pitchDeg: 17,
+  pitchDeg: 22,
   /** Vertical world span kept in view around the working height. */
-  minSpan: 1.55,
+  minSpan: 1.1,
   maxSpan: 3.4,
   spanPerMetre: 0.32,
   /** Minimum horizontal world span (keeps the placement range visible in portrait). */

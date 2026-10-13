@@ -194,9 +194,9 @@ async function boot(): Promise<void> {
 
   // Warm up shader programs so the first frames do not stutter.
   try {
-    ctx.renderer.compile(ctx.scene, ctx.camera);
-  } catch {
-    /* optional */
+    game.prewarm();
+  } catch (err) {
+    console.warn('Shader prewarm failed', err);
   }
   hud.setLoading(1, 'Ready');
   game.loaded();
@@ -223,11 +223,20 @@ async function boot(): Promise<void> {
   canvas.addEventListener('webglcontextlost', () => fatal('The graphics context was lost (the system reclaimed GPU memory).'));
 
   let last = performance.now();
+  let failures = 0;
   const loop = (now: number) => {
+    // Schedule first: one bad frame must not silently stop the game loop.
+    requestAnimationFrame(loop);
     const dt = (now - last) / 1000;
     last = now;
-    game!.update(dt);
-    requestAnimationFrame(loop);
+    try {
+      game!.update(dt);
+      failures = 0;
+    } catch (err) {
+      failures++;
+      console.error('Frame failed', err);
+      if (failures > 30) fatal('Rock Stack stopped after repeated errors.', err);
+    }
   };
   requestAnimationFrame(loop);
 
@@ -235,3 +244,10 @@ async function boot(): Promise<void> {
 }
 
 boot().catch((err) => fatal('Rock Stack failed to start.', err));
+
+// Offline play for the home-screen app (production builds only).
+if (import.meta.env.PROD && 'serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => undefined);
+  });
+}

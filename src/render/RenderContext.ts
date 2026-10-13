@@ -16,6 +16,9 @@ export class RenderContext {
   width = 1;
   height = 1;
   private frameTimes: number[] = [];
+  private pendingCheck: { previousScale: number; previousMedian: number } | null = null;
+  /** Detected frame-rate cap (ms per frame), 0 when none. */
+  frameCapMs = 0;
   private sampleClock = 0;
   private resizeListeners: ((w: number, h: number) => void)[] = [];
   contextLost = false;
@@ -83,11 +86,13 @@ export class RenderContext {
 
   /**
    * Adaptive resolution: lowers the render resolution when frames take too
-   * long and slowly raises it again when there is headroom. `cpuMs` is the
-   * time spent in our own frame code, used to tell a vsync cap (iOS Low Power
-   * Mode, 30 fps) from real overload.
+   * long and slowly raises it again when there is headroom.
+   *
+   * iOS Low Power Mode caps rAF at 30 fps regardless of load. If a downshift
+   * does not improve the frame time, the slowness is a cap, not GPU load: the
+   * resolution is restored and further downshifts need clearly worse frames.
    */
-  trackFrame(frameMs: number, cpuMs: number): void {
+  trackFrame(frameMs: number): void {
     this.frameTimes.push(frameMs);
     this.sampleClock += frameMs / 1000;
     if (this.sampleClock < ADAPTIVE.sampleSeconds) return;
@@ -95,11 +100,24 @@ export class RenderContext {
     const median = sorted[Math.floor(sorted.length / 2)];
     this.frameTimes = [];
     this.sampleClock = 0;
-    const throttled = median > 30 && median < 36 && cpuMs < 10; // steady 30 fps cap
-    if (!throttled && median > ADAPTIVE.downshiftMs && this.resolutionScale > ADAPTIVE.minResolutionScale) {
+    if (this.pendingCheck) {
+      const { previousScale, previousMedian } = this.pendingCheck;
+      this.pendingCheck = null;
+      if (median > previousMedian * 0.9) {
+        // No gain from fewer pixels: frame-rate cap (e.g. Low Power Mode).
+        this.frameCapMs = median;
+        this.resolutionScale = previousScale;
+        this.resize();
+        return;
+      }
+    }
+    const downshiftAt = this.frameCapMs > 0 ? this.frameCapMs * 1.2 : ADAPTIVE.downshiftMs;
+    if (median > downshiftAt && this.resolutionScale > ADAPTIVE.minResolutionScale) {
+      this.pendingCheck = { previousScale: this.resolutionScale, previousMedian: median };
       this.resolutionScale = Math.max(ADAPTIVE.minResolutionScale, this.resolutionScale - ADAPTIVE.resolutionStep);
       this.resize();
     } else if (median < ADAPTIVE.upshiftMs && this.resolutionScale < 1) {
+      this.frameCapMs = 0;
       this.resolutionScale = Math.min(1, this.resolutionScale + ADAPTIVE.resolutionStep / 2);
       this.resize();
     }

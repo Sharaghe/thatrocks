@@ -106,7 +106,10 @@ diffuseColor.rgb *= grain * mix(0.72, 1.0, cavity);
 diffuseColor.rgb = mix(diffuseColor.rgb, uSpeckleDark, clamp(sB.r * uSpeckle, 0.0, 1.0) * 0.85);
 diffuseColor.rgb = mix(diffuseColor.rgb, uSpeckleLight, clamp(sB.g * uSpeckle, 0.0, 1.0) * 0.6);
 float wet = 1.0 - smoothstep(uWaterLevel - 0.01, uWaterLevel + 0.035, vWorldPos.y);
-diffuseColor.rgb *= mix(1.0, 0.55, wet);`,
+diffuseColor.rgb *= mix(1.0, 0.68, wet);
+// Same light absorption as the riverbed so submerged stones sit in the water.
+float stoneDepth = max(0.0, uWaterLevel - vWorldPos.y);
+diffuseColor.rgb *= exp(-stoneDepth * vec3(1.9, 0.95, 1.6));`,
       )
       .replace(
         '#include <roughnessmap_fragment>',

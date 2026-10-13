@@ -42,6 +42,7 @@ try {
   await page.waitForFunction(() => window.__rockstack && window.__rockstack.phase() === 'title', null, { timeout: 90000 });
   console.log('fps probe', await page.evaluate(() => new Promise((r) => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 3000) requestAnimationFrame(f); else r(n / 3); }; requestAnimationFrame(f); })));
 } catch (e) { console.log('title timeout', logs.join('\n')); }
+await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r)))));
 await page.waitForTimeout(1500);
 await page.screenshot({ path: `${outDir}/${tag}-1-title.png`, timeout: 180000 });
 await page.click('#btn-start');

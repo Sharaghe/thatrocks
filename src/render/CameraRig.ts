@@ -77,9 +77,9 @@ export class CameraRig {
 
     switch (t.mode) {
       case 'title':
-        span = 2.6;
-        focusY = t.baseY + 0.55;
-        pitch = degToRad(12);
+        span = 2.8;
+        focusY = t.baseY + 0.75;
+        pitch = degToRad(7);
         this.titleSpin += dt * 0.05;
         azimuthTarget = this.targetAzimuth + Math.sin(this.titleSpin) * 0.35;
         followRate = 1.5;

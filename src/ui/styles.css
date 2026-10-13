@@ -646,8 +646,9 @@ button {
 
 .over-stats {
   display: grid;
-  grid-template-columns: repeat(4, auto);
-  gap: 22px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  width: min(100%, 440px);
   margin: 6px 0 10px;
 }
 
@@ -670,9 +671,9 @@ button {
   color: var(--ink-faint);
 }
 
-@media (max-width: 380px) {
+@media (max-width: 360px) {
   .over-stats {
-    grid-template-columns: repeat(2, auto);
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 

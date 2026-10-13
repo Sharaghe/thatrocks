@@ -228,12 +228,15 @@ export function lockPageGestures(): void {
   for (const type of ['gesturestart', 'gesturechange', 'gestureend']) {
     document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
   }
+  // Double-tap zoom guard. Controls are exempt (they use touch-action:
+  // manipulation), otherwise a quick second tap on a button would lose its click.
+  const isControl = (el: EventTarget | null) => el instanceof Element && el.closest('button, input, select, label') !== null;
   let lastTouchEnd = 0;
   document.addEventListener(
     'touchend',
     (e) => {
       const now = Date.now();
-      if (now - lastTouchEnd < 320 && !allowScroll(e.target)) e.preventDefault();
+      if (now - lastTouchEnd < 320 && !allowScroll(e.target) && !isControl(e.target)) e.preventDefault();
       lastTouchEnd = now;
     },
     { passive: false },

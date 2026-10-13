@@ -106,14 +106,35 @@ float heightSand(vec2 uv) {
   h += 0.22 * gnoise(uv * 220.0, vec2(220.0));
   return h;
 }
+// Rounded pebbles of varied size bedded in sand (per-cell radius, not Voronoi plateaus).
+// Returns (height, tone id of the pebble that owns this texel).
+vec2 pebbleLayer(vec2 uv, float freq, float minR, float maxR) {
+  vec2 p = uv * freq;
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  float h = 0.0;
+  float id = 0.5;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 o = vec2(float(x), float(y));
+      vec2 cell = mod(i + o, vec2(freq));
+      vec2 rnd = hash22(cell);
+      float r = mix(minR, maxR, hash12(cell + 3.1));
+      vec2 d = o + rnd * 0.7 + 0.15 - f;
+      // slightly elongated pebbles
+      float ang = hash12(cell + 9.7) * 6.2831;
+      vec2 e = vec2(cos(ang) * d.x + sin(ang) * d.y, -sin(ang) * d.x + cos(ang) * d.y) * vec2(1.0, 1.35);
+      float q = 1.0 - dot(e, e) / (r * r);
+      float hc = q > 0.0 ? sqrt(q) * (0.75 + 0.25 * hash12(cell + 1.7)) : 0.0;
+      if (hc > h) { h = hc; id = hash12(cell + 5.3); }
+    }
+  }
+  return vec2(h, id);
+}
 float heightPebbles(vec2 uv) {
-  vec3 big = cellular(uv, 11.0);
-  vec3 small = cellular(uv + 0.31, 29.0);
-  float hb = sqrt(clamp(1.0 - pow(big.x / max(big.y, 1e-3), 2.0) * 1.15, 0.0, 1.0));
-  float hs = sqrt(clamp(1.0 - pow(small.x / max(small.y, 1e-3), 2.0) * 1.2, 0.0, 1.0));
-  float h = max(hb, hs * 0.55);
-  h = max(h, 0.18 + 0.1 * fbm(uv + 0.6, 16.0, 3, 0.5)); // sand bed between pebbles
-  h += 0.05 * gnoise(uv * 140.0, vec2(140.0));
+  float h = max(pebbleLayer(uv, 9.0, 0.32, 0.5).x, pebbleLayer(uv + 0.37, 21.0, 0.25, 0.45).x * 0.6);
+  h = max(h, 0.12 + 0.08 * fbm(uv + 0.6, 16.0, 3, 0.5)); // sand bed between pebbles
+  h += 0.04 * gnoise(uv * 140.0, vec2(140.0));
   return h;
 }
 float heightMoss(vec2 uv) {
@@ -162,9 +183,11 @@ void main() {
     float v = 0.5 + 0.35 * fbm(uv + 0.2, 5.0, 4, 0.5) + (grains - 0.5) * 0.25;
     outColor = vec4(normalXY(uv, 0.55), v, clamp(0.5 + h, 0.0, 1.0));
   } else if (uMode == 3) {
-    vec3 big = cellular(uv, 11.0);
+    vec2 big = pebbleLayer(uv, 9.0, 0.32, 0.5);
+    vec2 small = pebbleLayer(uv + 0.37, 21.0, 0.25, 0.45);
+    float tone = big.x >= small.x * 0.6 ? big.y : small.y;
     float h = heightPebbles(uv);
-    outColor = vec4(normalXY(uv, 1.3), big.z, clamp(h, 0.0, 1.0));
+    outColor = vec4(normalXY(uv, 1.6), tone, clamp(h, 0.0, 1.0));
   } else if (uMode == 4) {
     float h = heightMoss(uv);
     float v = 0.5 + 0.45 * fbm(uv + 0.4, 3.0, 4, 0.55);

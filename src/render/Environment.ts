@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { WORLD, type QualitySettings } from '../config';
 import { Rng } from '../core/rng';
 import { Noise3 } from '../core/noise';
@@ -52,7 +52,7 @@ export class Environment {
     scene.add(this.group);
 
     this.createSky();
-    scene.fog = new THREE.FogExp2(FOG_COLOR, 0.021);
+    scene.fog = new THREE.FogExp2(FOG_COLOR, 0.028);
 
     this.sun = new THREE.DirectionalLight('#ffdcb0', 4.0);
     this.sun.castShadow = true;
@@ -73,6 +73,7 @@ export class Environment {
     this.baseMesh = this.createBaseRock();
     this.createScatter();
     this.createGrass();
+    this.createBushes();
     this.createTrees();
   }
 
@@ -261,7 +262,8 @@ vec3 pebCol = mix(mix(pebA, pebB, smoothstep(0.0, 0.6, tp.b)), pebC, smoothstep(
 pebCol *= mix(0.85, 1.06, tp.a) * mix(0.85, 1.1, tsM.b);
 // pebbles bedded in sand: the gaps between them show sand, not dark cracks
 pebCol = mix(sandCol * 0.82, pebCol, smoothstep(0.12, 0.42, tp.a));
-vec3 mossCol = mix(vec3(0.16, 0.20, 0.07), vec3(0.32, 0.33, 0.12), tm.b) * mix(0.8, 1.15, tmM.b);
+vec3 mossCol = mix(vec3(0.13, 0.17, 0.06), vec3(0.34, 0.33, 0.13), tm.b) * mix(0.7, 1.2, tmM.b);
+mossCol = mix(mossCol, vec3(0.30, 0.25, 0.14), smoothstep(0.62, 0.8, tmM.b) * 0.6); // dry patches
 vec3 dirtCol = vec3(0.30, 0.24, 0.17) * mix(0.85, 1.1, ts.b);
 vec3 groundCol = sandCol * w4.x + pebCol * w4.y + mossCol * w4.z + dirtCol * w4.w;
 float depth = uWaterLevel - vWPos.y;
@@ -269,7 +271,7 @@ float wet = 1.0 - smoothstep(-0.015, 0.09, -depth);
 groundCol *= mix(1.0, 0.58, wet);
 if (depth > 0.0) {
   // light absorption in the water column (green-blue tint)
-  groundCol *= exp(-depth * vec3(2.5, 1.05, 1.45));
+  groundCol *= exp(-depth * vec3(1.9, 0.95, 1.6));
   vec2 cuv = wp * 0.55;
   float c1 = texture2D(tWater, cuv + vec2(uTime * 0.035, uTime * 0.012)).b;
   float c2 = texture2D(tWater, cuv * 1.31 + vec2(-uTime * 0.021, uTime * 0.027) + 0.5).b;
@@ -347,12 +349,12 @@ roughnessFactor = mix(0.97 * w4.x + 0.82 * w4.y + 1.0 * w4.z + 0.95 * w4.w, 0.32
     geo.setIndex(indices);
 
     const mat = new THREE.MeshStandardMaterial({
-      color: '#3f6450',
+      color: '#2c4a3a',
       roughness: 0.05,
       metalness: 0,
       transparent: true,
       depthWrite: false,
-      envMapIntensity: 0.62,
+      envMapIntensity: 0.5,
     });
     const uniforms = { tWater: { value: textures.water }, uBaseCenter: { value: new THREE.Vector2(this.opts.basePosition[0], this.opts.basePosition[2]) } };
     mat.onBeforeCompile = (shader) => {
@@ -396,12 +398,12 @@ vec4 w2 = texture2D(tWater, wp * 0.71 + vec2(0.37, 0.11) - fl * uTime * speed * 
 vec4 w3 = texture2D(tWater, wp * 0.12 + vec2(0.2, 0.6) - fl * uTime * speed * 0.5);
 float d = max(vDepth, 0.0);
 float shore = smoothstep(0.0, 0.035, vDepth);
-float alphaDepth = mix(0.14, 0.7, smoothstep(0.02, 0.7, d));
+float alphaDepth = mix(0.06, 0.55, smoothstep(0.03, 0.9, d));
 // foam: shoreline band and around the base rock, broken up by noise
 float foamNoise = w2.a * 0.6 + w1.a * 0.4;
 float rockDist = length(wp - uBaseCenter);
 float foam = (1.0 - smoothstep(0.0, 0.045, vDepth)) * smoothstep(0.5, 0.72, foamNoise) * 0.8;
-foam += (1.0 - smoothstep(0.55, 0.8, rockDist)) * smoothstep(0.6, 0.82, foamNoise + 0.12 * sin(uTime * 1.3 + rockDist * 14.0)) * 0.35;
+foam += (1.0 - smoothstep(0.5, 0.66, rockDist)) * smoothstep(0.7, 0.9, foamNoise) * 0.18;
 foam = clamp(foam, 0.0, 1.0);
 diffuseColor.rgb = mix(diffuseColor.rgb * mix(1.1, 0.7, smoothstep(0.0, 0.6, d)), vec3(0.9, 0.93, 0.9), foam * 0.8);
 diffuseColor.a = clamp(alphaDepth + foam * 0.55, 0.0, 1.0) * shore;`,
@@ -453,7 +455,7 @@ gl_FragColor = vec4((totalDiffuse * diffuseColor.a + totalSpecular * shore * 0.8
   private createScatter() {
     const { terrain, quality, textures } = this.opts;
     const rng = this.rng.fork();
-    const rocks: RockId[] = ['granite', 'basalt', 'quartzite', 'sandstone', 'limestone', 'slate'];
+    const rocks: RockId[] = ['granite', 'quartzite', 'sandstone', 'limestone', 'granite', 'basalt'];
     const variants = 6;
     const total = Math.round(900 * quality.scatterDensity);
     for (let v = 0; v < variants; v++) {
@@ -475,15 +477,15 @@ gl_FragColor = vec4((totalDiffuse * diffuseColor.a + totalSpecular * shore * 0.8
         const z = Math.sin(a) * r;
         const h = terrain.height(x, z);
         // pebbles gather on the riverbed and along the waterline
-        const p = h < 0.05 ? 0.85 : h < 0.25 ? 0.45 : 0.06;
+        const p = h < -0.05 ? 0.35 : h < 0.12 ? 0.9 : h < 0.25 ? 0.4 : 0.05;
         if (!rng.chance(p)) continue;
         if (Math.hypot(x - this.opts.basePosition[0], z - this.opts.basePosition[2]) < 0.85) continue;
         const scale = rng.range(0.28, 0.85) * (h < 0 ? 1 : 0.8);
         e.set(rng.range(-0.25, 0.25), rng.range(0, Math.PI * 2), rng.range(-0.25, 0.25));
         q.setFromEuler(e);
-        m.compose(new THREE.Vector3(x, h - 0.02 * scale, z), q, new THREE.Vector3(scale, scale * rng.range(0.8, 1.05), scale));
+        m.compose(new THREE.Vector3(x, h - 0.035 * scale, z), q, new THREE.Vector3(scale, scale * rng.range(0.55, 0.85), scale));
         mesh.setMatrixAt(placed, m);
-        color.setScalar(rng.range(0.78, 1.12));
+        color.setScalar(rng.range(0.95, 1.35));
         mesh.setColorAt(placed, color);
         placed++;
       }
@@ -503,7 +505,7 @@ gl_FragColor = vec4((totalDiffuse * diffuseColor.a + totalSpecular * shore * 0.8
       let x = 0;
       let z = 0;
       for (let tries = 0; tries < 50; tries++) {
-        const r = rng.range(2.6, 13);
+        const r = rng.range(5.5, 14);
         const a = rng.range(0, Math.PI * 2);
         x = Math.cos(a) * r;
         z = Math.sin(a) * r;
@@ -580,7 +582,8 @@ diffuseColor.rgb *= mix(0.45, 1.05, smoothstep(0.0, 0.9, vBladeT));`,
     const n = this.noise;
     let placed = 0;
     for (let tries = 0; placed < count && tries < count * 20; tries++) {
-      const r = 1.6 + Math.pow(rng.next(), 1.3) * 22;
+      // The camera orbits the tower at 2–5 m: keep that ring free of tall grass.
+      const r = 5.4 + Math.pow(rng.next(), 1.3) * 20;
       const a = rng.range(0, Math.PI * 2);
       const x = Math.cos(a) * r;
       const z = Math.sin(a) * r;
@@ -609,6 +612,53 @@ diffuseColor.rgb *= mix(0.45, 1.05, smoothstep(0.0, 0.9, vBladeT));`,
     this.group.add(mesh);
     this.materials.push(mat);
     this.geometries.push(blade);
+  }
+
+  private createBushes() {
+    const { terrain, quality } = this.opts;
+    const rng = this.rng.fork();
+    const parts: THREE.BufferGeometry[] = [];
+    for (let b = 0; b < 5; b++) {
+      let blob: THREE.BufferGeometry = new THREE.IcosahedronGeometry(rng.range(0.28, 0.42), 3);
+      blob.deleteAttribute('uv');
+      blob = mergeVertices(blob);
+      blob.scale(1, rng.range(0.55, 0.75), 1);
+      blob.translate(rng.range(-0.3, 0.3), rng.range(0.12, 0.3), rng.range(-0.3, 0.3));
+      jitter(blob, rng, 0.03);
+      paint(blob, new THREE.Color().setRGB(rng.range(0.1, 0.17), rng.range(0.16, 0.24), rng.range(0.05, 0.08)));
+      parts.push(blob.index ? blob.toNonIndexed() : blob);
+    }
+    const geo = mergeParts(parts);
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, envMapIntensity: 0.4 });
+    const count = Math.round(70 * quality.scatterDensity);
+    const mesh = new THREE.InstancedMesh(geo, mat, count);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const color = new THREE.Color();
+    let placed = 0;
+    for (let tries = 0; placed < count && tries < count * 40; tries++) {
+      const r = rng.range(4.5, 26);
+      const a = rng.range(0, Math.PI * 2);
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r;
+      const h = terrain.height(x, z);
+      if (h < 0.3) continue;
+      const s = rng.range(0.6, 1.6);
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng.range(0, Math.PI * 2));
+      m.compose(new THREE.Vector3(x, h - 0.08 * s, z), q, new THREE.Vector3(s, s * rng.range(0.8, 1.2), s));
+      mesh.setMatrixAt(placed, m);
+      color.setScalar(rng.range(0.75, 1.2));
+      mesh.setColorAt(placed, color);
+      placed++;
+    }
+    mesh.count = placed;
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    mesh.receiveShadow = true;
+    mesh.name = 'bushes';
+    this.group.add(mesh);
+    this.materials.push(mat);
+    this.geometries.push(geo);
   }
 
   private grassTuftGeometry(rng: Rng): THREE.BufferGeometry {
@@ -658,7 +708,7 @@ diffuseColor.rgb *= mix(0.45, 1.05, smoothstep(0.0, 0.9, vBladeT));`,
     const rng = this.rng.fork();
     const conifer = this.coniferGeometry(rng);
     const broadleaf = this.broadleafGeometry(rng);
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, envMapIntensity: 0.5 });
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, envMapIntensity: 0.35 });
     for (const [geo, share] of [
       [conifer, 0.65],
       [broadleaf, 0.35],
@@ -670,13 +720,13 @@ diffuseColor.rgb *= mix(0.45, 1.05, smoothstep(0.0, 0.9, vBladeT));`,
       const color = new THREE.Color();
       let placed = 0;
       for (let tries = 0; placed < count && tries < count * 40; tries++) {
-        const r = rng.range(17, 48);
+        const r = rng.range(24, 58);
         const a = rng.range(0, Math.PI * 2);
         const x = Math.cos(a) * r;
         const z = Math.sin(a) * r;
         const h = terrain.height(x, z);
         if (h < 0.55) continue;
-        const s = rng.range(0.75, 1.35) * (geo === conifer ? rng.range(5, 9) : rng.range(4, 7));
+        const s = rng.range(0.8, 1.4) * (geo === conifer ? rng.range(7, 12) : rng.range(5.5, 9));
         q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng.range(0, Math.PI * 2));
         m.compose(new THREE.Vector3(x, h - 0.2, z), q, new THREE.Vector3(s * rng.range(0.85, 1.15), s, s * rng.range(0.85, 1.15)));
         mesh.setMatrixAt(placed, m);
@@ -698,7 +748,7 @@ diffuseColor.rgb *= mix(0.45, 1.05, smoothstep(0.0, 0.9, vBladeT));`,
     const parts: THREE.BufferGeometry[] = [];
     const trunk = new THREE.CylinderGeometry(0.025, 0.04, 0.35, 6);
     trunk.translate(0, 0.17, 0);
-    paint(trunk, new THREE.Color('#4d3b2c'));
+    paint(trunk, new THREE.Color('#6a5644'));
     parts.push(trunk);
     const tiers = 7;
     for (let t = 0; t < tiers; t++) {
@@ -710,29 +760,43 @@ diffuseColor.rgb *= mix(0.45, 1.05, smoothstep(0.0, 0.9, vBladeT));`,
       paint(cone, new THREE.Color().setRGB(0.075 + f * 0.035, 0.13 + f * 0.05, 0.065 + f * 0.01));
       parts.push(cone);
     }
-    return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)))!;
+    return mergeParts(parts);
   }
 
   private broadleafGeometry(rng: Rng): THREE.BufferGeometry {
     const parts: THREE.BufferGeometry[] = [];
     const trunk = new THREE.CylinderGeometry(0.03, 0.05, 0.5, 6);
     trunk.translate(0, 0.25, 0);
-    paint(trunk, new THREE.Color('#4a3a2b'));
+    paint(trunk, new THREE.Color('#6e5c49'));
     parts.push(trunk);
     for (let b = 0; b < 6; b++) {
-      const blob = new THREE.IcosahedronGeometry(rng.range(0.16, 0.26), 1);
+      let blob: THREE.BufferGeometry = new THREE.IcosahedronGeometry(rng.range(0.16, 0.26), 2);
+      blob.deleteAttribute('uv');
+      blob = mergeVertices(blob);
       blob.translate(rng.range(-0.16, 0.16), rng.range(0.55, 0.95), rng.range(-0.16, 0.16));
       jitter(blob, rng, 0.035);
       paint(blob, new THREE.Color().setRGB(rng.range(0.13, 0.22), rng.range(0.19, 0.27), rng.range(0.06, 0.09)));
       parts.push(blob);
     }
-    return mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)))!;
+    return mergeParts(parts);
   }
 
   dispose(): void {
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();
   }
+}
+
+/** Merge parts with identical attribute layouts (position, normal, color), non-indexed. */
+function mergeParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+  const prepared = parts.map((p) => {
+    const g = p.index ? p.toNonIndexed() : p;
+    for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'color'].includes(name)) g.deleteAttribute(name);
+    return g;
+  });
+  const merged = mergeGeometries(prepared);
+  if (!merged) throw new Error('Environment: geometry merge failed');
+  return merged;
 }
 
 function paint(geo: THREE.BufferGeometry, color: THREE.Color) {

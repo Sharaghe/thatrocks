@@ -150,6 +150,38 @@ export class Game implements InputSink {
     this.resetCamera();
   }
 
+  /**
+   * Compile every shader program the game will need before play starts, so
+   * the first stone, ghost and debris never cause a hitch (notably on iOS).
+   */
+  prewarm(): void {
+    const scene = this.ctx.scene;
+    const temp: THREE.Object3D[] = [];
+    const geo = new THREE.SphereGeometry(0.1, 8, 6);
+    const colors = new Float32Array(geo.getAttribute('position').count * 3).fill(0.5);
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    for (const rock of ['granite', 'sandstone', 'basalt', 'slate', 'quartzite', 'limestone'] as RockId[]) {
+      const m = new THREE.Mesh(geo, this.materialFor(rock));
+      m.position.set(0, -50, 0);
+      m.castShadow = true;
+      temp.push(m);
+    }
+    const ghost = new THREE.Mesh(geo, this.ghostMaterial);
+    ghost.position.set(0, -50, 0);
+    temp.push(ghost);
+    scene.add(...temp);
+    const wasVisible = [this.marker.visible, this.dropLine.visible];
+    this.marker.visible = true;
+    this.dropLine.visible = true;
+    try {
+      this.ctx.renderer.compile(scene, this.ctx.camera);
+    } finally {
+      scene.remove(...temp);
+      geo.dispose();
+      [this.marker.visible, this.dropLine.visible] = wasVisible;
+    }
+  }
+
   // ------------------------------------------------------------ lifecycle
   get phase(): GamePhase {
     return this.fsm.phase;
@@ -279,12 +311,20 @@ export class Game implements InputSink {
     const token = ++this.spawnToken;
     const level = this.level;
     const recipe = this.sequence.recipe(level);
-    void this.d.factory.get(this.stoneKey(level), recipe).then((shape) => {
-      if (token !== this.spawnToken || this.phase !== 'aiming') return;
-      this.setHeld(shape, level);
-      // Prefetch the next stone while the player aims.
-      void this.d.factory.get(this.stoneKey(level + 1), this.sequence.recipe(level + 1));
-    });
+    this.d.factory
+      .get(this.stoneKey(level), recipe)
+      .catch((err) => {
+        // Never leave the player without a stone: fall back to a variant recipe.
+        console.warn('Stone generation failed, using a variant', err);
+        return this.d.factory.get(`${this.stoneKey(level)}:alt`, this.sequence.recipe(level + 7919));
+      })
+      .then((shape) => {
+        if (token !== this.spawnToken || this.phase !== 'aiming') return;
+        this.setHeld(shape, level);
+        // Prefetch the next stone while the player aims.
+        void this.d.factory.get(this.stoneKey(level + 1), this.sequence.recipe(level + 1)).catch(() => undefined);
+      })
+      .catch((err) => console.error('Could not create a stone', err));
   }
 
   private materialFor(rock: RockId): THREE.MeshStandardMaterial {
@@ -557,7 +597,7 @@ export class Game implements InputSink {
     if (this.colliderLines) this.refreshColliderLines();
     this.ctx.render();
     this.frameCpuMs = performance.now() - t0;
-    this.ctx.trackFrame(dtReal * 1000, this.frameCpuMs);
+    this.ctx.trackFrame(dtReal * 1000);
     this.d.debug.frame(dtReal * 1000);
     this.d.debug.update(dtReal * 1000, () => this.debugLines());
   }
@@ -891,7 +931,7 @@ export class Game implements InputSink {
     const lines = [
       `phase ${this.phase}${this.paused ? ' (paused)' : ''}  timeScale ${this.timeScale.toFixed(2)}`,
       `cpu ${this.frameCpuMs.toFixed(1)} ms  physics ${this.lastPhysicsMs.toFixed(2)} ms/frame  step ${sim.physics.lastStepMs.toFixed(2)} ms`,
-      `res ×${this.ctx.resolutionScale.toFixed(2)}  dpr ${this.ctx.pixelRatio.toFixed(2)}  ${this.ctx.width}×${this.ctx.height}  ${this.d.qualityLabel}`,
+      `res ×${this.ctx.resolutionScale.toFixed(2)}${this.ctx.frameCapMs ? ` (cap ${this.ctx.frameCapMs.toFixed(0)} ms)` : ''}  dpr ${this.ctx.pixelRatio.toFixed(2)}  ${this.ctx.width}×${this.ctx.height}  ${this.d.qualityLabel}`,
       `draw calls ${this.ctx.renderer.info.render.calls}  tris ${(this.ctx.renderer.info.render.triangles / 1000).toFixed(0)}k`,
       `seed ${this.seed}  level ${this.level}  steps ${sim.physics.stepCount}`,
       `bodies ${active.length}  awake ${motion.awake}  vmax ${motion.maxLinear.toFixed(3)}  ωmax ${motion.maxAngular.toFixed(3)}`,
@@ -957,6 +997,8 @@ export class Game implements InputSink {
       level: () => this.level,
       seed: () => this.seed,
       heldReady: () => this.held !== null && this.held.disp.init,
+      held: () => (this.held ? { x: this.held.x, z: this.held.z, yaw: this.held.yaw, pose: this.held.pose } : null),
+      paused: () => this.paused,
       towerHeight: () => this.towerTopCache - this.sim.baseTop(),
       stones: () => this.sim.activeStones().length,
       setHeld: (x: number, z: number, yaw?: number) => {
