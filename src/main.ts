@@ -246,7 +246,8 @@ async function boot(): Promise<void> {
 boot().catch((err) => fatal('Rock Stack failed to start.', err));
 
 // Offline play for the home-screen app (production builds only).
-if (import.meta.env.PROD && 'serviceWorker' in navigator && location.protocol === 'https:') {
+// Skipped when embedded in a frame (e.g. a preview), where it cannot apply.
+if (import.meta.env.PROD && 'serviceWorker' in navigator && location.protocol === 'https:' && window.self === window.top) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => undefined);
   });
