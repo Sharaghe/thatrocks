@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#1d1f1c" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Rock Stack — balance natural river stones into the tallest tower you dare." />
+    <!-- iPhone / iPad home-screen app -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Rock Stack" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <title>Rock Stack</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene" aria-label="Rock Stack game view"></canvas>
+      <div class="vignette" aria-hidden="true"></div>
+
+      <div id="hud" class="hud" hidden>
+        <header class="hud-top">
+          <div class="stat">
+            <div class="stat-value" id="score">0</div>
+            <div class="stat-label">Score</div>
+          </div>
+          <div class="stat stat-center">
+            <div class="stat-value stat-small" id="height">0.00<span class="unit">m</span></div>
+            <div class="stat-label">Height</div>
+          </div>
+          <button class="icon-btn" id="btn-pause" aria-label="Pause">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.6" height="14" rx="1.2" /><rect x="13.9" y="5" width="3.6" height="14" rx="1.2" /></svg>
+          </button>
+        </header>
+        <div class="combo" id="combo" aria-live="polite"></div>
+        <div class="hint" id="hint">Drag to move · Twist to rotate · Drop when ready</div>
+        <footer class="controls" id="controls">
+          <div class="controls-group controls-left">
+            <button class="ctrl-btn" id="btn-rot-left" aria-label="Rotate left">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.4 8.2A7 7 0 1 1 5 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /><path d="M3.6 5.6 7.9 8.6 4.2 12.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </button>
+            <button class="ctrl-btn" id="btn-flip" aria-label="Turn stone over">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5c2-3.4 5-5 8-5s6 1.6 8 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /><path d="M20 4.5v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /><path d="M20 14.5c-2 3.4-5 5-8 5s-6-1.6-8-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /><path d="M4 19.5v-5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </button>
+          </div>
+          <button class="drop-btn" id="btn-drop">Drop</button>
+          <div class="controls-group controls-right">
+            <button class="ctrl-btn" id="btn-rot-right" aria-label="Rotate right">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.6 8.2A7 7 0 1 0 19 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /><path d="M20.4 5.6 16.1 8.6 19.8 12.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+            </button>
+          </div>
+        </footer>
+      </div>
+
+      <div id="popups" aria-live="polite"></div>
+      <div id="slowmo" class="slowmo" aria-hidden="true"></div>
+
+      <section id="screen-loading" class="screen screen-loading">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+          <h1 class="title">Rock Stack</h1>
+        </div>
+        <div class="loader"><div class="loader-bar" id="loader-bar"></div></div>
+        <p class="loader-text" id="loader-text">Gathering stones…</p>
+      </section>
+
+      <section id="screen-title" class="screen screen-title" hidden>
+        <div class="title-wrap">
+          <h1 class="title">Rock Stack</h1>
+          <p class="tagline">Balance river stones. Dare more, score more.</p>
+        </div>
+        <div class="title-best" id="title-best"></div>
+        <button class="primary-btn" id="btn-start">Begin</button>
+        <ul class="howto">
+          <li><b>Drag</b> to position the stone</li>
+          <li><b>Twist</b> or ⟲ ⟳ to rotate · <b>Flip</b> to turn it over</li>
+          <li><b>Drop</b> it. Edges and overhangs score more — if they hold.</li>
+        </ul>
+        <div class="title-footer">
+          <button class="text-btn" id="btn-title-settings">Settings</button>
+          <span class="install-hint" id="install-hint" hidden>Tip: Share → <b>Add to Home Screen</b> for full-screen play</span>
+        </div>
+      </section>
+
+      <section id="screen-over" class="screen screen-over" hidden>
+        <p class="over-kicker" id="over-kicker">The tower fell</p>
+        <div class="over-score" id="over-score">0</div>
+        <div class="over-badge" id="over-badge" hidden>New best</div>
+        <div class="over-stats">
+          <div><span id="over-height">0.00 m</span><small>height</small></div>
+          <div><span id="over-stones">0</span><small>stones</small></div>
+          <div><span id="over-combo">0</span><small>best combo</small></div>
+          <div><span id="over-best">0</span><small>best score</small></div>
+        </div>
+        <button class="primary-btn" id="btn-again">Stack again</button>
+        <button class="text-btn" id="btn-menu">Menu</button>
+      </section>
+
+      <section id="screen-pause" class="screen screen-pause" hidden>
+        <h2 class="panel-title">Paused</h2>
+        <div class="settings" data-scrollable>
+          <label class="setting"><span>Sound</span><input type="checkbox" id="set-sound" /></label>
+          <label class="setting" id="row-haptics"><span>Vibration</span><input type="checkbox" id="set-haptics" /></label>
+          <label class="setting"><span>Graphics</span>
+            <select id="set-quality">
+              <option value="auto">Auto</option>
+              <option value="low">Performance</option>
+              <option value="medium">Balanced</option>
+              <option value="high">Quality</option>
+            </select>
+          </label>
+          <label class="setting"><span>Debug overlay</span><input type="checkbox" id="set-debug" /></label>
+          <button class="setting setting-btn" id="btn-fullscreen" hidden>Full screen</button>
+        </div>
+        <button class="primary-btn" id="btn-resume">Resume</button>
+        <div class="pause-row">
+          <button class="text-btn" id="btn-restart">Restart</button>
+          <button class="text-btn" id="btn-quit">Menu</button>
+        </div>
+      </section>
+
+      <div id="debug" class="debug" hidden data-scrollable></div>
+      <div id="fatal" class="screen screen-fatal" hidden></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
